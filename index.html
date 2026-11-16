@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Theremin</title>
+    <style>
+      html, body { margin: 0; height: 100%; overflow: hidden; background: #07070b; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; color: #dfe3ff; }
+      canvas { display: block; cursor: none; }
+      #hud { position: fixed; top: 16px; left: 18px; pointer-events: none; user-select: none; }
+      #note { font-size: 56px; font-weight: 700; line-height: 1; letter-spacing: -1px; }
+      #note small { font-size: 22px; opacity: 0.6; margin-left: 4px; }
+      .row { font-size: 13px; opacity: 0.8; margin-top: 6px; }
+      .bar { width: 180px; height: 6px; background: #ffffff18; border-radius: 3px; margin-top: 4px; overflow: hidden; }
+      .bar > div { height: 100%; width: 0; background: linear-gradient(90deg, #5cf, #f6c); }
+      #cents { position: relative; }
+      #cents > div { position: absolute; top: 0; width: 4px; height: 100%; left: 50%; background: #fff; transform: translateX(-2px); }
+      #help { position: fixed; bottom: 14px; left: 18px; font-size: 12px; opacity: 0.55; line-height: 1.6; pointer-events: none; }
+      #help b { color: #fff; opacity: 1; }
+      #modes { position: fixed; bottom: 14px; right: 18px; font-size: 12px; text-align: right; line-height: 1.6; pointer-events: none; }
+      .on { color: #7fffb2; } .off { opacity: 0.4; }
+      #start { position: fixed; inset: 0; display: grid; place-items: center; background: #07070bcc; cursor: pointer; z-index: 10; text-align: center; }
+      #start h1 { font-size: 44px; margin: 0 0 8px; font-weight: 700; letter-spacing: 6px; }
+      #start p { opacity: 0.7; margin: 4px; }
+    </style>
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+          "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+        }
+      }
+    </script>
+  </head>
+  <body>
+    <div id="hud">
+      <div id="note">–</div>
+      <div class="row" id="freq">0.0 Hz</div>
+      <div class="row">tuning</div>
+      <div class="bar" id="cents"><div></div></div>
+      <div class="row">volume</div>
+      <div class="bar" id="vol"><div></div></div>
+      <div class="row" id="depth">depth 0.00</div>
+    </div>
+
+    <div id="help">
+      <b>mouse</b> move hand (x / y) &nbsp; <b>scroll</b> or <b>W/S</b> move hand in depth (z)<br />
+      <b>closer to the vertical antenna</b> = higher pitch &nbsp; <b>higher hand</b> = louder (lower toward the loop to fade out)<br />
+      <b>right-drag</b> orbit camera &nbsp; <b>Q</b> snap to notes &nbsp; <b>V</b> vibrato &nbsp; <b>E</b> echo &nbsp; <b>space</b> mute
+    </div>
+    <div id="modes"></div>
+
+    <div id="start">
+      <div>
+        <h1>THEREMIN</h1>
+        <p>click anywhere to power on</p>
+        <p style="font-size: 12px; opacity: 0.45">headphones recommended · start with a low volume</p>
+      </div>
+    </div>
+
+    <script type="module" src="./main.js"></script>
+  </body>
+</html>

@@ -13,3 +13,9 @@ it has two antennas. the vertical one on the right controls pitch, and the loop 
 the trick is that your body has electrical capacitance. inside the theremin there are two high-frequency oscillators, one fixed and one whose frequency shifts slightly as your hand gets closer to the antenna. both run way above anything you can hear, but the difference between them lands in the audible range, and that difference is the note you hear. move your hand a few centimetres and the difference changes, which means the pitch changes. the volume antenna works on the same idea, just wired up to control loudness instead.
 
 there are no keys, frets, or fixed notes, so playing in tune is entirely down to how precisely you hold your hand in the air. that's why it's notoriously hard to play well, and why it has that swoopy, voice-like sound you've probably heard in old sci-fi film scores.
+
+## why this exists
+
+"hand me downs" from mac miller's circles has a theremin-like whistling solo in it, and that's what got me hooked. the song is fragile and melancholy, and that wavering, almost-human tone is a big part of why it hits as hard as it does. it's the reason i fell in love with the instrument.
+
+ever since, i've wanted to build a real one. this isn't that yet, it's a browser version to play with until i get there. think of it as an ode to the one i'll build eventually.

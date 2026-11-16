@@ -2,12 +2,12 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
     <title>Theremin</title>
     <style>
-      html, body { margin: 0; height: 100%; overflow: hidden; background: #07070b; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; color: #dfe3ff; }
-      canvas { display: block; cursor: none; }
-      #hud { position: fixed; top: 16px; left: 18px; pointer-events: none; user-select: none; }
+      html, body { margin: 0; height: 100%; overflow: hidden; background: #07070b; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; color: #dfe3ff; touch-action: none; overscroll-behavior: none; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; }
+      canvas { display: block; cursor: none; touch-action: none; }
+      #hud { position: fixed; top: calc(16px + env(safe-area-inset-top)); left: calc(18px + env(safe-area-inset-left)); pointer-events: none; }
       #note { font-size: 56px; font-weight: 700; line-height: 1; letter-spacing: -1px; }
       #note small { font-size: 22px; opacity: 0.6; margin-left: 4px; }
       .row { font-size: 13px; opacity: 0.8; margin-top: 6px; }
@@ -15,13 +15,36 @@
       .bar > div { height: 100%; width: 0; background: linear-gradient(90deg, #5cf, #f6c); }
       #cents { position: relative; }
       #cents > div { position: absolute; top: 0; width: 4px; height: 100%; left: 50%; background: #fff; transform: translateX(-2px); }
-      #help { position: fixed; bottom: 14px; left: 18px; font-size: 12px; opacity: 0.55; line-height: 1.6; pointer-events: none; }
+      #help { position: fixed; bottom: calc(14px + env(safe-area-inset-bottom)); left: calc(18px + env(safe-area-inset-left)); font-size: 12px; opacity: 0.55; line-height: 1.6; pointer-events: none; }
       #help b { color: #fff; opacity: 1; }
-      #modes { position: fixed; bottom: 14px; right: 18px; font-size: 12px; text-align: right; line-height: 1.6; pointer-events: none; }
+      #modes { position: fixed; bottom: calc(14px + env(safe-area-inset-bottom)); right: calc(18px + env(safe-area-inset-right)); display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
+      #modes button { font: inherit; font-size: 12px; background: none; border: 0; padding: 2px 0; color: inherit; cursor: pointer; }
       .on { color: #7fffb2; } .off { opacity: 0.4; }
-      #start { position: fixed; inset: 0; display: grid; place-items: center; background: #07070bcc; cursor: pointer; z-index: 10; text-align: center; }
+
+      /* depth slider, shown on touch devices */
+      #depth-slider { position: fixed; right: calc(10px + env(safe-area-inset-right)); top: 50%; transform: translateY(-60%); width: 44px; height: 38vh; display: none; touch-action: none; }
+      #depth-slider .track { position: absolute; left: 50%; top: 0; bottom: 0; width: 4px; transform: translateX(-2px); border-radius: 2px; background: linear-gradient(#5cf8, #f6c8); }
+      #depth-slider .thumb { position: absolute; left: 50%; width: 26px; height: 26px; margin: -13px 0 0 -13px; border-radius: 50%; background: #dfe3ff; box-shadow: 0 0 12px #5cf; }
+      #depth-slider .label { position: absolute; left: 50%; transform: translateX(-50%); font-size: 10px; opacity: 0.5; white-space: nowrap; }
+
+      .touch-only { display: none; }
+      @media (hover: none) and (pointer: coarse) {
+        .touch-only { display: revert; }
+        .desktop-only { display: none; }
+        #depth-slider { display: block; }
+      }
+      @media (max-width: 640px) {
+        #note { font-size: 38px; }
+        #note small { font-size: 16px; }
+        .row { font-size: 11px; margin-top: 4px; }
+        .bar { width: 120px; height: 5px; }
+        #help { font-size: 11px; max-width: 60vw; }
+      }
+
+      #start { position: fixed; inset: 0; display: grid; place-items: center; background: #07070bcc; cursor: pointer; z-index: 10; text-align: center; padding: 20px; }
       #start h1 { font-size: 44px; margin: 0 0 8px; font-weight: 700; letter-spacing: 6px; }
       #start p { opacity: 0.7; margin: 4px; }
+      #start .small { font-size: 12px; opacity: 0.45; }
     </style>
     <script type="importmap">
       {
@@ -44,17 +67,33 @@
     </div>
 
     <div id="help">
-      <b>mouse</b> move hand (x / y) &nbsp; <b>scroll</b> or <b>W/S</b> move hand in depth (z)<br />
-      <b>closer to the vertical antenna</b> = higher pitch &nbsp; <b>higher hand</b> = louder (lower toward the loop to fade out)<br />
-      <b>right-drag</b> orbit camera &nbsp; <b>Q</b> snap to notes &nbsp; <b>V</b> vibrato &nbsp; <b>E</b> echo &nbsp; <b>space</b> mute
+      <span class="desktop-only">
+        <b>mouse</b> move hand (x / y) &nbsp; <b>scroll</b> or <b>W/S</b> move hand in depth (z)<br />
+        <b>closer to the vertical antenna</b> = higher pitch &nbsp; <b>higher hand</b> = louder (lower toward the loop to fade out)<br />
+        <b>right-drag</b> orbit camera &nbsp; <b>Q</b> snap to notes &nbsp; <b>V</b> vibrato &nbsp; <b>E</b> echo &nbsp; <b>space</b> mute
+      </span>
+      <span class="touch-only">
+        <b>drag</b> to play &nbsp; <b>slider</b> moves in depth<br />
+        closer to the antenna = higher<br />
+        higher hand = louder<br />
+        <b>two fingers</b> orbit the camera
+      </span>
     </div>
     <div id="modes"></div>
+
+    <div id="depth-slider">
+      <div class="label" style="top: -18px">far</div>
+      <div class="track"></div>
+      <div class="thumb"></div>
+      <div class="label" style="bottom: -18px">near</div>
+    </div>
 
     <div id="start">
       <div>
         <h1>THEREMIN</h1>
-        <p>click anywhere to power on</p>
-        <p style="font-size: 12px; opacity: 0.45">headphones recommended · start with a low volume</p>
+        <p><span class="desktop-only">click</span><span class="touch-only">tap</span> anywhere to power on</p>
+        <p class="small">headphones recommended · start with a low volume</p>
+        <p class="small touch-only">no sound? check your phone's silent switch</p>
       </div>
     </div>
 

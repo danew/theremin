@@ -59,6 +59,7 @@ camera.position.set(0, 2.0, 5.4);
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.target.set(0, 1.5, 0);
 controls.mouseButtons = { LEFT: null, MIDDLE: null, RIGHT: THREE.MOUSE.ROTATE };
+controls.touches = { ONE: null, TWO: THREE.TOUCH.DOLLY_ROTATE }; // zoom is off, so this is rotate-only
 controls.enableZoom = false;
 controls.enablePan = false;
 controls.enableDamping = true;
@@ -294,12 +295,65 @@ const plane = new THREE.Plane();
 const tmpV = new THREE.Vector3();
 const camDir = new THREE.Vector3();
 
-addEventListener('pointermove', (e) => {
-  pointer.set((e.clientX / innerWidth) * 2 - 1, -(e.clientY / innerHeight) * 2 + 1);
-  state.active = true;
+// Touch: the first finger on the canvas is the hand. A second finger hands
+// control to the camera orbit and silences the instrument until all fingers lift.
+// The hand sits a little above the fingertip so your finger doesn't cover it.
+const TOUCH_OFFSET_Y = 56;
+const touches = new Set();
+let handTouch = null;
+
+function aim(e) {
+  const y = e.pointerType === 'mouse' ? e.clientY : e.clientY - TOUCH_OFFSET_Y;
+  pointer.set((e.clientX / innerWidth) * 2 - 1, -(y / innerHeight) * 2 + 1);
+}
+
+renderer.domElement.addEventListener('pointerdown', (e) => {
+  if (e.pointerType === 'mouse') return;
+  touches.add(e.pointerId);
+  if (touches.size === 1) {
+    handTouch = e.pointerId;
+    aim(e);
+    state.active = true;
+  } else {
+    handTouch = null;
+    state.active = false;
+  }
 });
-document.addEventListener('pointerleave', () => (state.active = false));
-addEventListener('blur', () => (state.active = false));
+addEventListener('pointermove', (e) => {
+  if (e.pointerType === 'mouse') {
+    aim(e);
+    state.active = true;
+  } else if (e.pointerId === handTouch) {
+    aim(e);
+  }
+});
+function releaseTouch(e) {
+  touches.delete(e.pointerId);
+  if (e.pointerId === handTouch) {
+    handTouch = null;
+    state.active = false;
+  }
+}
+addEventListener('pointerup', releaseTouch);
+addEventListener('pointercancel', releaseTouch);
+document.addEventListener('pointerleave', (e) => { if (e.pointerType === 'mouse') state.active = false; });
+addEventListener('blur', () => { state.active = false; touches.clear(); handTouch = null; });
+
+// Depth slider (touch devices): top = far, bottom = near.
+const slider = document.getElementById('depth-slider');
+const sliderThumb = slider.querySelector('.thumb');
+function slideTo(e) {
+  const r = slider.getBoundingClientRect();
+  const t = clamp((e.clientY - r.top) / r.height);
+  state.depth = CFG.depthRange - t * 2 * CFG.depthRange;
+}
+slider.addEventListener('pointerdown', (e) => {
+  slider.setPointerCapture(e.pointerId);
+  slideTo(e);
+});
+slider.addEventListener('pointermove', (e) => {
+  if (slider.hasPointerCapture(e.pointerId)) slideTo(e);
+});
 addEventListener('wheel', (e) => {
   state.depth = clamp(state.depth + e.deltaY * 0.0015, -CFG.depthRange, CFG.depthRange);
 }, { passive: true });
@@ -318,6 +372,8 @@ addEventListener('keyup', (e) => keys.delete(e.code));
 
 const startEl = document.getElementById('start');
 startEl.addEventListener('click', async () => {
+  // Safari 17+: a "playback" audio session keeps playing with the silent switch on.
+  if (navigator.audioSession) navigator.audioSession.type = 'playback';
   audio ??= initAudio();
   await audio.ctx.resume();
   startEl.remove();
@@ -332,10 +388,25 @@ const $cents = document.querySelector('#cents > div');
 const $vol = document.querySelector('#vol > div');
 const $depth = document.getElementById('depth');
 const $modes = document.getElementById('modes');
+// Mode toggles double as tappable buttons for touch screens.
+const MODES = [
+  ['quantize', 'snap', () => state.quantize],
+  ['vibrato', 'vibrato', () => state.vibrato],
+  ['echo', 'echo', () => state.echo],
+  ['muted', 'sound', () => !state.muted],
+];
 function renderModes() {
-  const m = (on, label) => `<span class="${on ? 'on' : 'off'}">${label} ${on ? 'on' : 'off'}</span>`;
-  $modes.innerHTML = [m(state.quantize, 'snap'), m(state.vibrato, 'vibrato'), m(state.echo, 'echo'), m(!state.muted, 'sound')].join('<br>');
+  $modes.innerHTML = MODES.map(([key, label, isOn]) =>
+    `<button data-mode="${key}" class="${isOn() ? 'on' : 'off'}">${label} ${isOn() ? 'on' : 'off'}</button>`
+  ).join('');
 }
+$modes.addEventListener('click', (e) => {
+  const key = e.target.closest('button')?.dataset.mode;
+  if (!key) return;
+  state[key] = !state[key];
+  e.target.blur(); // so space/enter don't re-trigger the button
+  renderModes();
+});
 renderModes();
 
 // ─────────────────────────────────────────────────────────────
@@ -437,14 +508,24 @@ function tick() {
   $cents.style.left = `${50 + (state.quantize ? 0 : cents)}%`;
   $vol.style.width = `${audible * 100}%`;
   $depth.textContent = `depth ${state.depth >= 0 ? '+' : ''}${state.depth.toFixed(2)}`;
+  sliderThumb.style.top = `${((CFG.depthRange - state.depth) / (2 * CFG.depthRange)) * 100}%`;
 
   renderer.render(scene, camera);
   requestAnimationFrame(tick);
 }
-requestAnimationFrame(tick);
 
-addEventListener('resize', () => {
+// Keep the whole instrument in frame on narrow (portrait) screens by pulling
+// the camera back until roughly ±1.7 units fit horizontally.
+const BASE_DISTANCE = camera.position.distanceTo(controls.target);
+function fitToScreen() {
   camera.aspect = innerWidth / innerHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(innerWidth, innerHeight);
-});
+  const halfFov = THREE.MathUtils.degToRad(camera.fov / 2);
+  const distance = Math.max(BASE_DISTANCE, 1.7 / (Math.tan(halfFov) * camera.aspect));
+  tmpV.subVectors(camera.position, controls.target).setLength(distance);
+  camera.position.copy(controls.target).add(tmpV);
+}
+fitToScreen();
+addEventListener('resize', fitToScreen);
+requestAnimationFrame(tick);
